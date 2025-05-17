@@ -11,7 +11,7 @@ def load_data(output_path: str, batch_size: int, test: int = 0.3, transform=None
 
     print("[INFO] Cargando datos")
     augmentation_transform = transforms.Compose([
-        transforms.RandomHorizontalFlip(0.8),
+        transforms.RandomHorizontalFlip(0.4),
         transforms.RandomRotation(30),
         transforms.RandomVerticalFlip(0.6),
     ])
@@ -39,6 +39,9 @@ def load_data(output_path: str, batch_size: int, test: int = 0.3, transform=None
 
     train_loader = DataLoader(train_indices, batch_size=batch_size, shuffle=True)
     test_loader = DataLoader(val_indices, batch_size=batch_size, shuffle=True)
+
+    print("[INFO] tamaño del train_loader:", len(train_loader.dataset))
+    print("[INFO] tamaño del test_loader:", len(test_loader.dataset))
 
     return train_loader, test_loader
 

@@ -6,11 +6,12 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 from tqdm.auto import tqdm
 from datetime import datetime
-from utils.engine import train_func, test_func
+from src.utils.engine import train_func, test_func
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, f1_score, roc_curve, auc, recall_score
 import seaborn as sns
 
+from torch.optim import lr_scheduler
 
 
 def plot_confusion_matrix(cm, class_names,title):
@@ -120,6 +121,7 @@ def train(model: nn.Module, test_data: DataLoader, train_data: DataLoader, loss_
     best_test_acc = 0
     best_train_loss = 1000
     best_model = None
+    patience_counter = 0
 
     results = {
         "train_loss": [],
@@ -127,12 +129,17 @@ def train(model: nn.Module, test_data: DataLoader, train_data: DataLoader, loss_
         "test_loss": [],
         "test_acc": []
     }
+
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
+
     for epoch in tqdm(range(epochs)):
         train_loss, train_acc,train_preds, train_labes = train_func(
             model,train_data,loss_fn,optimizer, device)
         test_loss, test_acc, test_preds, test_labels = test_func(
             model, test_data, loss_fn, device)
-        
+
+        scheduler.step()
+
         train_f1 = f1_score(train_labes, train_preds, average="weighted")
         test_f1 = f1_score(test_labels, test_preds, average="weighted")
         train_recall = recall_score(train_labes, train_preds, average="weighted")
@@ -192,6 +199,16 @@ def train(model: nn.Module, test_data: DataLoader, train_data: DataLoader, loss_
             best_test_acc = train_acc
             best_train_loss = train_loss
             best_model = model.state_dict()
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
+        if patience_counter > 5:
+            print(f"[INFO] Early stopping at epoch {epoch+1}")
+            cm = confusion_matrix(test_preds, test_labels)
+            cm_fig = plot_confusion_matrix(cm, train_data.dataset.dataset.classes, title)
+            writer.add_figure("Confusion Matrix", cm_fig, global_step=epoch)
+            break
 
     return results, best_model, best_test_acc, cm_fig, test_loss
 
@@ -207,8 +224,8 @@ def create_write(name: str, model: str, experiment_name: str,extra: str=None) ->
 
 def select_optimizer(model: nn.Module, optimizer: str):
     if optimizer == "Adam":
-        return torch.optim.Adam(model.parameters(), lr=0.001)
+        return torch.optim.Adam(model.parameters(), lr=0.01)
     if optimizer == "SGD":
-        return torch.optim.SGD(model.parameters(), lr=0.001)
+        return torch.optim.SGD(model.parameters(), lr=0.01)
     if optimizer == "Adamw":
-        return torch.optim.AdamW(model.parameters(), lr=0.001)
+        return torch.optim.AdamW(model.parameters(), lr=0.01)

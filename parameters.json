@@ -1,9 +1,10 @@
 {
-    "name": "Test_5_scratch_cnn",
+    "name": "Test_7_new_fine_tune_resnet_scheduler",
+
     "batches": 256,
-    "epochs": [5, 10, 15, 20],
-    "optimizers": ["Adamw", "Adam", "SGD"],
-    "models": ["cnnconnecteddeep"],
+    "epochs": [15, 20, 30],
+    "optimizers": ["Adamw"],
+    "models": ["custom_resnet152"],
     "aditionals" : ["augmentation", "no_all_data"],
     "inference": true
 }
