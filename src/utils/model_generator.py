@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 import torchvision
 from src.utils.engine import set_seed
 
@@ -7,6 +8,10 @@ def get_model(model_name: str) -> nn.Module:
 
     if model_name == "tinyvgg":
         model = TinyVGG(input_shape=1, hidden_units=64, output_shape=2)
+        return model
+
+    if model_name == "cnnconnecteddeep":
+        model = CNNConnectedDeep()
         return model
     
     if "custom" in model_name:
@@ -40,9 +45,95 @@ def get_model(model_name: str) -> nn.Module:
             # model = CustomEfficientNet(model)
             return model
 
+
     model = create_resnet152()
-    model = CustomEfficientNet(model)
+    # model = CustomEfficientNet(model)
     return model
+
+class CNNConnectedDeep(nn.Module):
+    def __init__(self, num_classes=3):
+        super(CNNConnectedDeep, self).__init__()
+
+        # Primeras capas
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+
+        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(32)
+
+        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm2d(64)
+
+        self.pool = nn.MaxPool2d(2, 2)
+        self.dropout = nn.Dropout(0.4)
+
+        # Concatenación de conv1 y conv3
+        # 32 (resized conv1) + 64 = 96
+        # Bloques de compresión adicionales con conexiones
+        self.conv4 = nn.Conv2d(96, 128, kernel_size=3, padding=1)
+        self.bn4 = nn.BatchNorm2d(128)
+
+        self.conv5 = nn.Conv2d(128, 160, kernel_size=3, padding=1)
+        self.bn5 = nn.BatchNorm2d(160)
+
+        self.conv6 = nn.Conv2d(160, 192, kernel_size=3, padding=1)
+        self.bn6 = nn.BatchNorm2d(192)
+
+        self.conv7 = nn.Conv2d(192 + 128, 224, kernel_size=3, padding=1)  # concat con out4
+        self.bn7 = nn.BatchNorm2d(224)
+
+        self.conv8 = nn.Conv2d(224 + 160, 256, kernel_size=3, padding=1)  # concat con out5
+        self.bn8 = nn.BatchNorm2d(256)
+
+        self.global_pool = nn.AdaptiveAvgPool2d((4, 4))  # reduce a [B, 256, 4, 4]
+
+        # Flatten: 256 * 4 * 4 = 4096 → muy alto → reducimos
+        self.fc1 = nn.Linear(256 * 4 * 4, 512)
+        self.fc2 = nn.Linear(512, 128)
+        self.fc3 = nn.Linear(128, num_classes)
+
+    def forward(self, x):
+        out1 = F.relu(self.bn1(self.conv1(x)))  # [B, 32, 224, 224]
+        out2 = F.relu(self.bn2(self.conv2(out1)))
+        out2 = out1 + out2  # Residual connection
+        out2 = self.pool(out2)  # [B, 32, 112, 112]
+
+        out3 = F.relu(self.bn3(self.conv3(out2)))
+        out3 = self.pool(out3)  # [B, 64, 56, 56]
+
+        out1_resized = F.interpolate(out1, size=out3.shape[2:])
+        concat1 = torch.cat((out3, out1_resized), dim=1)  # [B, 96, 56, 56]
+
+        # Bloque 4
+        out4 = F.relu(self.bn4(self.conv4(concat1)))
+        out4 = self.pool(out4)  # [B, 128, 28, 28]
+
+        # Bloque 5
+        out5 = F.relu(self.bn5(self.conv5(out4)))
+        out5 = self.pool(out5)  # [B, 160, 14, 14]
+
+        # Bloque 6
+        out6 = F.relu(self.bn6(self.conv6(out5)))
+        out6 = self.pool(out6)  # [B, 192, 7, 7]
+
+        # Concat out4 (resized) con out6
+        out4_resized = F.interpolate(out4, size=out6.shape[2:])
+        concat2 = torch.cat((out6, out4_resized), dim=1)  # [B, 192+128=320, 7, 7]
+        out7 = F.relu(self.bn7(self.conv7(concat2)))
+
+        # Concat out5 (resized) con out7
+        out5_resized = F.interpolate(out5, size=out7.shape[2:])
+        concat3 = torch.cat((out7, out5_resized), dim=1)  # [B, 224+160=384, 7, 7]
+        out8 = F.relu(self.bn8(self.conv8(concat3)))
+
+        x = self.global_pool(out8)  # [B, 256, 4, 4]
+        x = x.view(x.size(0), -1)   # Flatten → [B, 4096]
+
+        x = self.dropout(F.relu(self.fc1(x)))  # 4096 → 512
+        x = self.dropout(F.relu(self.fc2(x)))  # 512 → 128
+        out = self.fc3(x)  # 128 → num_classes
+
+        return out
 
 
 

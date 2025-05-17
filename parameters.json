@@ -1,12 +1,11 @@
 {
-    "name": "Test_4_Augmentation_256_batch_epochs",
+    "name": "Test_5_scratch_cnn",
     "batches": 256,
     "epochs": [5, 10, 15, 20],
-    "optimizers": ["Adamw"],
-    "models": ["custom_resnet152"],
+    "optimizers": ["Adamw", "Adam", "SGD"],
+    "models": ["cnnconnecteddeep"],
     "aditionals" : ["augmentation", "no_all_data"],
     "inference": true
-
 }
 
 
