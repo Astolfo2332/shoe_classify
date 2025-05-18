@@ -45,10 +45,11 @@ def get_model(model_name: str) -> nn.Module:
             # model = CustomEfficientNet(model)
             return model
 
+    match model_name:
+        case "vit_b_16":
+            return create_vit_b_16()
 
-    model = create_resnet152()
-    # model = CustomEfficientNet(model)
-    return model
+    raise NameError("Ingrese un nombre valido")
 
 class CNNConnectedDeep(nn.Module):
     def __init__(self, num_classes=3):
@@ -280,6 +281,23 @@ def create_convnext_tiny():
         torch.nn.Linear(in_features=768, out_features=2, bias=True)
     )
     print("[INFO] create new convnext_tiny model.")
+    return model
+
+def create_vit_b_16():
+    weights = torchvision.models.ViT_B_16_Weights.DEFAULT
+    model = torchvision.models.vit_b_16(weights=weights)
+    for param in model.parameters():
+        param.requires_grad = False
+
+    set_seed()
+
+    model.heads = nn.Sequential(
+        nn.Linear(in_features=768, out_features=256),
+        nn.ReLU(),
+        nn.Dropout(0.1),
+        nn.Linear(256, 3)
+    )
+    print("[INFO] create new vit_b_16 model.")
     return model
 
 def create_convnext_small():

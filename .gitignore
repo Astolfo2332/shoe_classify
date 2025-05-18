@@ -177,3 +177,8 @@ cython_debug/
 .vscode
 
 models/
+
+*.zip
+
+*.pdf
+*.html
